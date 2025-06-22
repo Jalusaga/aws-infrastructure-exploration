@@ -84,19 +84,19 @@ terraform apply
 
 - A VPC spanning two AZs
 
-- - Public subnets (one in each AZ) with an Internet Gateway & route tables
+  - Public subnets (one in each AZ) with an Internet Gateway & route tables
 
-- - Private subnets (one in each AZ) for your RDS/DB
+  - Private subnets (one in each AZ) for your RDS/DB
 
-- - Security Groups locking down traffic:
+  - Security Groups locking down traffic:
 
-- - - EC2_SG allows HTTP (80) from anywhere
+    - EC2_SG allows HTTP (80) from anywhere
 
-- - - DB_SG only allows DB port from the EC2’s SG
+    - DB_SG only allows DB port from the EC2’s SG
 
-- - An EC2 instance running Nginx in the public subnet
+  - An EC2 instance running Nginx in the public subnet
 
-- - A managed database in the private subnet
+  - A managed database in the private subnet
 
 ## 🚀 Testing & Usage
 
