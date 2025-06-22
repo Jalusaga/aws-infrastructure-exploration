@@ -72,6 +72,24 @@ resource "aws_route_table_association" "public_assoc" {
   route_table_id = aws_route_table.public_rt.id
 }
 
+resource "tls_private_key" "ssh_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "local_file" "private_key" {
+  content  = tls_private_key.ssh_key.private_key_pem
+  filename = pathexpand("~/.ssh/aws-infrastructure-exploration.pem")
+  file_permission = "0600"
+}
+
+# Register the public half with AWS
+resource "aws_key_pair" "aws-infrastructure-exploration" {
+  key_name   = "aws-infrastructure-exploration-key"
+  public_key = tls_private_key.ssh_key.public_key_openssh
+}
+
+
 resource "aws_security_group" "ec2_sg" {
   name        = "ec2-sg"
   description = "Allow HTTP and SSH"
@@ -109,6 +127,7 @@ resource "aws_instance" "web" {
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.ec2_sg.id]
   associate_public_ip_address = true
+  key_name                    = aws_key_pair.aws-infrastructure-exploration.key_name
 
   user_data = <<-EOF
               #!/bin/bash
@@ -159,7 +178,7 @@ resource "aws_db_instance" "db" {
   engine                 = "mysql"
   instance_class         = "db.t3.micro"
   allocated_storage      = 20
-  db_name                   = "mysql_db"
+  db_name                = "aws_infrastructure_exploration_db"
   username               = var.db_username
   password               = var.db_password
   parameter_group_name   = "default.mysql8.0"
