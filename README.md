@@ -20,7 +20,7 @@
     │                             (10.0.0.0/16)                                  │
     │  ┌──────────────────────┐                      ┌──────────────────────┐    │
     │  │  Public Subnet AZ-1  │                      │  Private Subnet AZ-1 │    │
-    │  │     (10.0.5.0/24)    │                      │     (10.0.1.0/24)    │    │
+    │  │     (10.0.5.0/24)    │                      │     (10.0.0.0/24)    │    │
     │  │ ┌─────────────────┐  │                      │ ┌─────────────────┐  │    │
     │  │ │  EC2 + Nginx    │  │                      │ │   RDS / DB      │  │    │
     │  │ └─────────────────┘  │                      │ └─────────────────┘  │    │
@@ -28,7 +28,7 @@
     │                                                                            │
     │                                                ┌──────────────────────┐    │
     │                                                │  Private Subnet AZ-2 │    │
-    │                                                │     (10.0.2.0/24)    │    │
+    │                                                │     (10.0.1.0/24)    │    │
     │                                                │                      │    │
     │                                                └──────────────────────┘    │
     └────────────────────────────────────────────────────────────────────────────┘
@@ -40,7 +40,7 @@
 
 2. AWS CLI configured with an IAM user / role that can create VPCs, EC2, RDS (or whatever DB you chose), SGs, etc.
 
-3. A bit of patience—Terraform will spin up real AWS resources (so costs do apply).
+3. A bit of patience—Terraform will spin up real AWS resources (so costs may apply).
 
 ## ⚙️ Getting Started
 
