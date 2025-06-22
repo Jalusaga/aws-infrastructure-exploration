@@ -1,4 +1,4 @@
-# AWS Infra Exploration with Terraform
+# AWS Infrastructure Exploration with Terraform
 
 > Putting Terraform through its paces: we’re building a VPC with two AZs, carving out public & private subnets, standing up an Nginx-powered EC2 in the public subnet, and hiding our database in the private subnet—complete with an Internet Gateway, routing tables, and all the security goodies.
 
@@ -47,8 +47,8 @@
 1. Cloning the repo
 
 ```bash
-git clone https://github.com/YourUsername/aws-infra-exploration.git
-cd aws-infra-exploration
+git clone https://github.com/jalusaga/aws-infrastructure-exploration.git
+cd aws-infrastructure-exploration
 ```
 
 2. Review & customize
