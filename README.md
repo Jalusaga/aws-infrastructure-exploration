@@ -56,7 +56,7 @@ cd aws-infrastructure-exploration
 - Rename the variables.tf file
 
 ```bash
-mv variables.tf.copy variables.tf
+cp variables.example variables.tf
 ```
 
 - variables.tf: double-check defaults (region, instance type, DB engine/version/credentials, subnet CIDRs)
