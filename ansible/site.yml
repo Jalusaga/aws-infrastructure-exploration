@@ -1,0 +1,167 @@
+---
+- name: Gather Terraform outputs
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars:
+    terraform_dir: "../terraform"
+  tasks:
+    - name: Run terraform output
+      command: terraform output -json
+      args:
+        chdir: "{{ terraform_dir }}"
+      register: tf_raw
+
+    - name: Parse Terraform outputs into fact `tf`
+      set_fact:
+        tf: "{{ tf_raw.stdout | from_json }}"
+
+    - name: Add web server to aws_instances group
+      add_host:
+        name: "{{ tf.web_public_ip.value }}"
+        ansible_host: "{{ tf.web_public_ip.value }}"
+        groups: aws_instances
+        tf: "{{ tf }}"
+        db_address: "{{ tf.db_address.value }}"
+        db_port: "{{ tf.db_port.value }}"
+
+- name: Deploy Django REST API
+  hosts: aws_instances
+  become: true
+  vars:
+    repo_url: "https://github.com/Jalusaga/django-simple-apirest"
+    project_dir: /home/ubuntu/myapi
+    venv_dir: "{{ project_dir }}/.venv"
+
+    allowed_hosts:
+      - "{{ tf.web_public_ip.value }}"
+    db_host: "{{ tf.db_address.value }}"
+    db_name: "aws_infrastructure_exploration_db"
+    db_user: "{{ tf.db_username.value }}"
+    db_pass: "{{ tf.db_password.value }}"
+    db_port: "{{ tf.db_port.value }}"
+    django_superuser_username: testuser
+    django_superuser_email: test@example.com
+    django_superuser_password: PasswordTest12345*
+
+  tasks:
+    - name: Ensure APT packages are installed
+      apt:
+        name:
+          - python3-venv
+          - python3-pip
+          - libmysqlclient-dev
+          - git
+        update_cache: yes
+
+    - name: Clone your Django project
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ project_dir }}"
+        version: main
+
+    - name: Create Python virtualenv
+      command: python3 -m venv "{{ venv_dir }}"
+      args:
+        creates: "{{ venv_dir }}/bin/activate"
+
+    - name: Install pip requirements
+      pip:
+        requirements: "{{ project_dir }}/requirements.txt"
+        virtualenv: "{{ venv_dir }}"
+
+    - name: Render environment file
+      template:
+        src: ".env.j2"
+        dest: "{{ project_dir }}/.env"
+
+    - name: Ensure the .env file is owned by ubuntu and readable
+      file:
+        path: "{{ project_dir }}/.env"
+        owner: ubuntu
+        group: ubuntu
+        mode: "0640"
+
+    - name: Run Django migrations
+      command: "{{ venv_dir }}/bin/python manage.py migrate"
+      args:
+        chdir: "{{ project_dir }}/myapi"
+
+    - name: Create default Django superuser
+      command: "{{ venv_dir }}/bin/python manage.py createsuperuser --noinput"
+      args:
+        chdir: "{{ project_dir }}/myapi"
+        creates: "{{ project_dir }}/.superuser_created"
+      environment:
+        DJANGO_SUPERUSER_USERNAME: "{{ django_superuser_username }}"
+        DJANGO_SUPERUSER_EMAIL: "{{ django_superuser_email }}"
+        DJANGO_SUPERUSER_PASSWORD: "{{ django_superuser_password }}"
+      register: superuser_result
+
+    - name: Touch a marker so we don't re-create the user
+      file:
+        path: "{{ project_dir }}/.superuser_created"
+        state: touch
+      when: superuser_result.changed
+
+    - name: Ensure staticfiles directory exists
+      file:
+        path: "{{ project_dir }}/staticfiles"
+        state: directory
+        owner: ubuntu
+        group: www-data
+        mode: "0755"
+
+    - name: Collect static files
+      command: "{{ venv_dir }}/bin/python manage.py collectstatic --noinput"
+      args:
+        chdir: "{{ project_dir }}/myapi"
+
+    - name: Copy systemd unit for Gunicorn
+      template:
+        src: "gunicorn.service.j2"
+        dest: "/etc/systemd/system/gunicorn.service"
+        mode: 0644
+      tags: [gunicorn]
+
+    - name: Reload systemd & start Gunicorn
+      systemd:
+        name: gunicorn
+        enabled: true
+        state: restarted
+        daemon_reload: yes
+      tags: [gunicorn]
+
+    - name: Drop in Nginx site conf
+      template:
+        src: "nginx.conf.j2"
+        dest: "/etc/nginx/sites-available/myapi"
+        mode: 0644
+
+    - name: Enable Nginx site
+      file:
+        src: "/etc/nginx/sites-available/myapi"
+        dest: "/etc/nginx/sites-enabled/myapi"
+        state: link
+        force: true
+
+    - name: Disable default Nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Restart Nginx
+      systemd:
+        name: nginx
+        state: restarted
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+      tags: [gunicorn]
+
+    - name: Restart Gunicorn
+      systemd:
+        name: gunicorn
+        state: restarted
+      tags: [gunicorn]

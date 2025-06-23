@@ -3,7 +3,23 @@ output "web_public_ip" {
   value       = aws_instance.web.public_ip
 }
 
-output "db_endpoint" {
-  description = "Endpoint of the RDS instance"
-  value       = aws_db_instance.db.endpoint
+output "db_address" {
+  description = "Hostname of the RDS instance"
+  value       = aws_db_instance.db.address  
+}
+
+output "db_port" {
+  description = "Port of the RDS instance"
+  value       = aws_db_instance.db.port 
+}
+
+output "db_username" {
+  description = "Username for the RDS database"
+  value       = var.db_username
+}
+
+output "db_password" {
+  description = "Password for the RDS database"
+  value       = var.db_password
+  sensitive   = true
 }

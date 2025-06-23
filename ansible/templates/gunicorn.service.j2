@@ -1,0 +1,20 @@
+[Unit]
+Description=gunicorn daemon for myapi
+After=network.target
+
+[Service]
+User=ubuntu
+Group=www-data
+
+WorkingDirectory=/home/ubuntu/myapi/myapi
+
+ExecStart=/home/ubuntu/myapi/.venv/bin/gunicorn \
+  --workers 3 \
+  --bind 127.0.0.1:8000 \
+  myapi.wsgi:application
+
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
