@@ -99,7 +99,7 @@ cd aws-infrastructure-exploration
    ```bash
    cp ansible/inventory.ini.example ansible/inventory.ini
    # edit ansible/inventory.ini:
-   #   ansible_ssh_private_key_file = ~/.ssh/aws-infrastructure-exploration.pem
+   # ansible_ssh_private_key_file = ~/.ssh/aws-infrastructure-exploration.pem
    ```
 
 2. Run the playbook:
