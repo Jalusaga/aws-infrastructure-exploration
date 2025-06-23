@@ -1,6 +1,1 @@
-.terraform/
-*.tfstate
-*.backup
-*.hcl
-variables.tf
-
+.vscode/

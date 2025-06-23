@@ -1,10 +1,10 @@
-# AWS Infrastructure Exploration with Terraform
+## AWS Infrastructure + Django REST API with Terraform & Ansible
 
-> Putting Terraform through its paces: we’re building a VPC with two AZs, carving out public & private subnets, standing up an Nginx-powered EC2 in the public subnet, and hiding our database in the private subnet—complete with an Internet Gateway, routing tables, and all the security goodies.
+> End-to-end provisioning: Terraform builds the AWS network, instances, and RDS; Ansible deploys and configures Nginx, Gunicorn, and a Django REST API with MySQL.
 
 ---
 
-## 🏗️ Architecture Overview
+## 🏗️ Infrastructure Architecture
 
 ```text
                                       ┌──────────┐
@@ -22,95 +22,126 @@
     │  │  Public Subnet AZ-1  │                      │  Private Subnet AZ-1 │    │
     │  │     (10.0.5.0/24)    │                      │     (10.0.0.0/24)    │    │
     │  │ ┌─────────────────┐  │                      │ ┌─────────────────┐  │    │
-    │  │ │  EC2 + Nginx    │  │                      │ │   RDS / DB      │  │    │
+    │  │ │  EC2 + Nginx    │  │                      │ │   RDS / MySQL   │  │    │
     │  │ └─────────────────┘  │                      │ └─────────────────┘  │    │
     │  └──────────────────────┘                      └──────────────────────┘    │
     │                                                                            │
     │                                                ┌──────────────────────┐    │
     │                                                │  Private Subnet AZ-2 │    │
     │                                                │     (10.0.1.0/24)    │    │
-    │                                                │                      │    │
+    │                                                │ ┌─────────────────┐  │    │
+    │                                                │ │   Idle/Spare    │  │    │
+    │                                                │ └─────────────────┘  │    │
     │                                                └──────────────────────┘    │
     └────────────────────────────────────────────────────────────────────────────┘
 ```
 
+This setup includes:
+
+- A VPC across two AZs with public/private subnets
+- An Internet Gateway and routing for the public subnet
+- Security Groups restricting traffic:
+
+  - **EC2_SG** allows HTTP/SSH from the internet
+  - **DB_SG** allows MySQL only from the EC2_SG
+
+- An RDS MySQL instance in the private subnet
+- An EC2 instance running Nginx, Gunicorn, and Django in the public subnet
+
+---
+
 ## 🔌 Prerequisites
 
-1. Terraform CLI (v1.0+ recommended) installed locally
+1. **Terraform CLI** (v1.0+)
+2. **AWS CLI** configured with appropriate IAM permissions
+3. **Ansible** (ansible-core)
+4. SSH key access to the EC2 (make sure `ansible_ssh_private_key_file` points to your `.pem`)
 
-2. AWS CLI configured with an IAM user / role that can create VPCs, EC2, RDS (or whatever DB you chose), SGs, etc.
+---
 
-3. A bit of patience—Terraform will spin up real AWS resources (so costs may apply).
+## ⚙️ Deployment Steps
 
-## ⚙️ Getting Started
-
-1. Cloning the repo
+### 1. Clone the repo
 
 ```bash
 git clone https://github.com/jalusaga/aws-infrastructure-exploration.git
 cd aws-infrastructure-exploration
 ```
 
-2. Review & customize
+### 2. Terraform: Provision AWS
 
-- Rename the variables.tf file
+1. Copy and customize variables:
 
-```bash
-cp variables.example variables.tf
-```
+   ```bash
+   cd terraform
+   cp variables.example.tf variables.tf
+   # edit variables.tf: db_username, db_password, etc.
+   ```
 
-- variables.tf: double-check defaults (region, instance type, DB engine/version/credentials, subnet CIDRs)
+2. Initialize & apply:
 
-3. Initialize Terraform
+   ```bash
+   terraform init
+   terraform apply -auto-approve
+   ```
 
-```bash
-terraform init
-```
+3. Note the outputs:
 
-4. See what's going to happen
+   ```bash
+   terraform output web_public_ip   # EC2 public IPv4
+   terraform output db_endpoint     # RDS endpoint
+   ```
 
-```bash
-terraform plan
-```
+### 3. Ansible: Configure the EC2 & Deploy Django App
 
-5. Apply the changes
+1. Copy inventory template and fill in your SSH key path:
 
-```bash
-terraform apply
-#type yes when prompted
-```
+   ```bash
+   cp ansible/inventory.ini.example ansible/inventory.ini
+   # edit ansible/inventory.ini:
+   #   ansible_ssh_private_key_file = ~/.ssh/aws-infrastructure-exploration.pem
+   ```
 
-### After a few minutes you’ll have:
+2. Run the playbook:
 
-- A VPC spanning two AZs
+   ```bash
+   cd ansible
+   ansible-playbook -i inventory.ini site.yml
+   ```
 
-  - Public subnets (one in each AZ) with an Internet Gateway & route tables
+This will:
 
-  - Private subnets (one in each AZ) for your RDS/DB
+- Install system packages (Nginx, Python3, pip, etc.)
+- Create a Python venv and install requirements
+- Render and enable the `.env` with DB credentials & ALLOWED_HOSTS
+- Run Django migrations and collectstatic
+- Create a default superuser (`testuser` / `PasswordTest12345*`)
+- Configure & start Gunicorn (systemd unit)
+- Upload Nginx site config and reload
 
-  - Security Groups locking down traffic:
+---
 
-    - EC2_SG allows HTTP (80) from anywhere
+## 🚀 Testing the Deployment
 
-    - DB_SG only allows DB port from the EC2’s SG
+1. **Django login API**
 
-  - An EC2 instance running Nginx in the public subnet
+   ```bash
+   curl -i -X POST http://$(terraform output -raw web_public_ip)/api/auth/login/ \
+     -H "Accept: application/json" \
+     -H "Content-Type: application/json" \
+     -d '{"username":"testuser","password":"PasswordTest12345*"}'
+   # should return 200 OK + {"token":"..."}
+   ```
 
-  - A managed database in the private subnet
+2. **Access admin site**
+   Visit `http://<EC2_PUBLIC_IP>/admin/`, log in as `testuser`.
 
-## 🚀 Testing & Usage
-
-1. Grab the EC2 public IP from Terraform’s outputs.
-
-2. Open your browser to http://<EC2_PUBLIC_IP>—you should see the default Nginx welcome page.
-
-3. From your EC2, try connecting to the database endpoint (shown in Terraform outputs) on port your chosen port.
+---
 
 ## 🧹 Cleanup
 
-When you're done playing around:
+1. Destroy AWS resources:
 
-```bash
-terraform destroy
-# Type “yes” when prompted
-```
+   ```bash
+   terraform destroy -auto-approve
+   ```
